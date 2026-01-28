@@ -1,163 +1,121 @@
 <!-- Add Income Modal -->
-<div id="incomeModal" class="modal">
+<aside id="incomeModal" class="modal" role="dialog" aria-labelledby="income-modal-title" aria-modal="true">
     <div class="modal-content">
-        <h3 class="text-lg font-semibold mb-4">Add Income</h3>
-        <form id="incomeForm" onsubmit="addTransaction(event, 'income')">
-            <input type="hidden" name="csrf_token" value="<?php echo CSRF::generateToken(); ?>">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1">Amount (Rs)</label>
-                    <input type="number" name="amount" step="0.01" min="0.01" required 
-                           class="w-full border border-gray-300 rounded px-3 py-2">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Remarks</label>
-                    <textarea name="remarks" rows="3" required 
-                              class="w-full border border-gray-300 rounded px-3 py-2"></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Date</label>
-                    <input type="date" name="date" required value="<?php echo date('Y-m-d'); ?>"
-                           class="w-full border border-gray-300 rounded px-3 py-2">
-                </div>
+        <h3 id="income-modal-title">Add Income</h3>
+        <form method="POST" action="index.php">
+            <?php echo CSRF::field(); ?>
+            <input type="hidden" name="add" value="1">
+            <input type="hidden" name="type" value="income">
+            
+            <div class="form-group">
+                <label for="income-amount" class="form-label">Amount (Rs)</label>
+                <input type="number" id="income-amount" name="amount" step="0.01" min="0.01" required class="form-input" aria-required="true">
             </div>
-            <div class="flex justify-end space-x-3 mt-6">
-                <button type="button" onclick="closeModal('incomeModal')" 
-                        class="border border-gray-300 px-4 py-2 rounded-lg">
-                    Cancel
-                </button>
-                <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
-                    Add Income
-                </button>
+            
+            <div class="form-group">
+                <label for="income-remarks" class="form-label">Remarks</label>
+                <textarea id="income-remarks" name="remarks" required class="form-textarea" aria-required="true"></textarea>
             </div>
+            
+            <div class="form-group">
+                <label for="income-date" class="form-label">Date</label>
+                <input type="date" id="income-date" name="date" required value="<?php echo date('Y-m-d'); ?>" class="form-input" aria-required="true">
+            </div>
+            
+            <footer class="modal-footer">
+                <button type="button" onclick="closeModal('incomeModal')" class="btn btn-outline">Cancel</button>
+                <button type="submit" class="btn btn-green">Add Income</button>
+            </footer>
         </form>
     </div>
-</div>
+</aside>
 
 <!-- Add Expense Modal -->
-<div id="expenseModal" class="modal">
+<aside id="expenseModal" class="modal" role="dialog" aria-labelledby="expense-modal-title" aria-modal="true">
     <div class="modal-content">
-        <h3 class="text-lg font-semibold mb-4">Add Expense</h3>
-        <form id="expenseForm" onsubmit="addTransaction(event, 'expense')">
-            <input type="hidden" name="csrf_token" value="<?php echo CSRF::generateToken(); ?>">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1">Amount (Rs)</label>
-                    <input type="number" name="amount" step="0.01" min="0.01" required 
-                           class="w-full border border-gray-300 rounded px-3 py-2">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Remarks</label>
-                    <textarea name="remarks" rows="3" required 
-                              class="w-full border border-gray-300 rounded px-3 py-2"></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Date</label>
-                    <input type="date" name="date" required value="<?php echo date('Y-m-d'); ?>"
-                           class="w-full border border-gray-300 rounded px-3 py-2">
-                </div>
+        <h3 id="expense-modal-title">Add Expense</h3>
+        <form method="POST" action="index.php">
+            <?php echo CSRF::field(); ?>
+            <input type="hidden" name="add" value="1">
+            <input type="hidden" name="type" value="expense">
+            
+            <div class="form-group">
+                <label for="expense-amount" class="form-label">Amount (Rs)</label>
+                <input type="number" id="expense-amount" name="amount" step="0.01" min="0.01" required class="form-input" aria-required="true">
             </div>
-            <div class="flex justify-end space-x-3 mt-6">
-                <button type="button" onclick="closeModal('expenseModal')" 
-                        class="border border-gray-300 px-4 py-2 rounded-lg">
-                    Cancel
-                </button>
-                <button type="submit" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
-                    Add Expense
-                </button>
+            
+            <div class="form-group">
+                <label for="expense-remarks" class="form-label">Remarks</label>
+                <textarea id="expense-remarks" name="remarks" required class="form-textarea" aria-required="true"></textarea>
             </div>
+            
+            <div class="form-group">
+                <label for="expense-date" class="form-label">Date</label>
+                <input type="date" id="expense-date" name="date" required value="<?php echo date('Y-m-d'); ?>" class="form-input" aria-required="true">
+            </div>
+            
+            <footer class="modal-footer">
+                <button type="button" onclick="closeModal('expenseModal')" class="btn btn-outline">Cancel</button>
+                <button type="submit" class="btn btn-red">Add Expense</button>
+            </footer>
         </form>
     </div>
-</div>
+</aside>
 
 <!-- Edit Transaction Modal -->
-<div id="editModal" class="modal">
+<aside id="editModal" class="modal" role="dialog" aria-labelledby="edit-modal-title" aria-modal="true">
     <div class="modal-content">
-        <h3 class="text-lg font-semibold mb-4">Edit Transaction</h3>
-        <form id="editForm" onsubmit="updateTransaction(event)">
-            <input type="hidden" name="csrf_token" value="<?php echo CSRF::generateToken(); ?>">
-            <input type="hidden" id="editId" name="id">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1">Type</label>
-                    <select id="editType" name="type" required 
-                            class="w-full border border-gray-300 rounded px-3 py-2">
-                        <option value="income">Income</option>
-                        <option value="expense">Expense</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Amount (Rs)</label>
-                    <input type="number" id="editAmount" name="amount" step="0.01" min="0.01" required 
-                           class="w-full border border-gray-300 rounded px-3 py-2">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Remarks</label>
-                    <textarea id="editRemarks" name="remarks" rows="3" required 
-                              class="w-full border border-gray-300 rounded px-3 py-2"></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Date</label>
-                    <input type="date" id="editDate" name="date" required 
-                           class="w-full border border-gray-300 rounded px-3 py-2">
-                </div>
+        <h3 id="edit-modal-title">Edit Transaction</h3>
+        <form method="POST" action="index.php" id="editForm">
+            <?php echo CSRF::field(); ?>
+            <input type="hidden" name="update" value="1">
+            <input type="hidden" name="id" id="editId">
+            
+            <div class="form-group">
+                <label for="editType" class="form-label">Type</label>
+                <select name="type" id="editType" required class="form-input" aria-required="true">
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                </select>
             </div>
-            <div class="flex justify-end space-x-3 mt-6">
-                <button type="button" onclick="closeModal('editModal')" 
-                        class="border border-gray-300 px-4 py-2 rounded-lg">
-                    Cancel
-                </button>
-                <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
-                    Update Transaction
-                </button>
+            
+            <div class="form-group">
+                <label for="editAmount" class="form-label">Amount (Rs)</label>
+                <input type="number" name="amount" id="editAmount" step="0.01" min="0.01" required class="form-input" aria-required="true">
             </div>
+            
+            <div class="form-group">
+                <label for="editRemarks" class="form-label">Remarks</label>
+                <textarea name="remarks" id="editRemarks" required class="form-textarea" aria-required="true"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="editDate" class="form-label">Date</label>
+                <input type="date" name="date" id="editDate" required class="form-input" aria-required="true">
+            </div>
+            
+            <footer class="modal-footer">
+                <button type="button" onclick="closeModal('editModal')" class="btn btn-outline">Cancel</button>
+                <button type="submit" class="btn btn-blue">Update</button>
+            </footer>
         </form>
     </div>
-</div>
+</aside>
 
-<!-- Profile Modal -->
-<div id="profileModal" class="modal">
+<!-- Delete Confirmation Modal -->
+<aside id="deleteModal" class="modal" role="dialog" aria-labelledby="delete-modal-title" aria-modal="true">
     <div class="modal-content">
-        <h3 class="text-lg font-semibold mb-4">Edit Profile</h3>
-        <form id="profileForm" onsubmit="updateProfile(event)">
-            <input type="hidden" name="csrf_token" value="<?php echo CSRF::generateToken(); ?>">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1">Full Name</label>
-                    <input type="text" id="profileName" name="full_name" required 
-                           value="<?php echo escape($_SESSION['full_name'] ?? ''); ?>"
-                           class="w-full border border-gray-300 rounded px-3 py-2">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Email</label>
-                    <input type="email" id="profileEmail" name="email" required 
-                           value="<?php echo escape($_SESSION['email'] ?? ''); ?>"
-                           class="w-full border border-gray-300 rounded px-3 py-2">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">Current Password</label>
-                    <input type="password" id="currentPassword" name="current_password" required 
-                           class="w-full border border-gray-300 rounded px-3 py-2">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">New Password (optional)</label>
-                    <input type="password" id="newPassword" name="new_password"
-                           placeholder="Leave blank to keep current password"
-                           class="w-full border border-gray-300 rounded px-3 py-2">
-                    <div class="text-xs text-gray-500 mt-1">
-                        Must be 8+ chars with uppercase, lowercase, and number
-                    </div>
-                </div>
-            </div>
-            <div class="flex justify-end space-x-3 mt-6">
-                <button type="button" onclick="closeModal('profileModal')" 
-                        class="border border-gray-300 px-4 py-2 rounded-lg">
-                    Cancel
-                </button>
-                <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
-                    Update Profile
-                </button>
-            </div>
+        <h3 id="delete-modal-title">Delete Transaction</h3>
+        <p>Are you sure you want to delete this transaction?</p>
+        <form method="POST" action="index.php" id="deleteForm">
+            <?php echo CSRF::field(); ?>
+            <input type="hidden" name="delete" value="1">
+            <input type="hidden" name="id" id="deleteId">
+            
+            <footer class="modal-footer">
+                <button type="button" onclick="closeModal('deleteModal')" class="btn btn-outline">Cancel</button>
+                <button type="submit" class="btn btn-red">Delete</button>
+            </footer>
         </form>
     </div>
-</div>
+</aside>

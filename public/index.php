@@ -1,369 +1,277 @@
 <?php
-/**
- * Main Dashboard Page
- * Handles all CRUD operations and displays dashboard
- */
-
 require_once '../includes/functions.php';
 $user_id = requireLogin();
 
-// ========================================
-// AJAX Request Handler
-// ========================================
-if (isset($_GET['ajax']) || isset($_POST['ajax'])) {
+// Handle AJAX requests
+if (isset($_GET['ajax'])) {
     header('Content-Type: application/json');
     
-    // CSRF validation for POST requests (security)
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!CSRF::validateToken($_POST['csrf_token'] ?? '')) {
-            echo json_encode(['success' => false, 'message' => 'Invalid security token']);
-            exit();
-        }
+    $action = $_GET['action'] ?? '';
+    
+    // Get summary
+    if ($action == 'summary') {
+        $totals = getTotals($user_id);
+        $balance = $totals['total_income'] - $totals['total_expense'];
+        echo json_encode([
+            'success' => true,
+            'total_income' => (float)$totals['total_income'],
+            'total_expense' => (float)$totals['total_expense'],
+            'balance' => (float)$balance
+        ]);
+        exit();
     }
     
-    $action = $_GET['action'] ?? $_POST['action'] ?? '';
+    // Get transactions
+    if ($action == 'transactions') {
+        $filters = [
+            'type' => $_GET['type'] ?? null,
+            'start_date' => $_GET['start_date'] ?? null,
+            'end_date' => $_GET['end_date'] ?? null,
+            'search' => $_GET['search'] ?? null,
+            'limit' => $_GET['limit'] ?? null
+        ];
+        $transactions = getTransactions($user_id, $filters);
+        echo json_encode(['success' => true, 'transactions' => $transactions]);
+        exit();
+    }
     
-    switch($action) {
-        // Get financial summary
-        case 'summary':
-            $totals = getFinancialTotals($user_id);
-            $balance = $totals['total_income'] - $totals['total_expense'];
-            
-            echo json_encode([
-                'success' => true,
-                'total_income' => (float)$totals['total_income'],
-                'total_expense' => (float)$totals['total_expense'],
-                'balance' => (float)$balance
-            ]);
-            exit();
-            
-        // Get chart data for specific period
-        case 'chart':
-            $period = $_GET['period'] ?? 'monthly';
-            $chart_data = getChartData($user_id, $period);
-            echo json_encode(['success' => true, 'chart_data' => $chart_data]);
-            exit();
-            
-        // Get transactions with filters (advanced search)
-        case 'transactions':
-            $filters = [
-                'type' => $_GET['type'] ?? null,
-                'start_date' => $_GET['start_date'] ?? null,
-                'end_date' => $_GET['end_date'] ?? null,
-                'search' => $_GET['search'] ?? null,
-                'min_amount' => $_GET['min_amount'] ?? null,
-                'max_amount' => $_GET['max_amount'] ?? null,
-                'limit' => $_GET['limit'] ?? null
-            ];
-            $transactions = getTransactions($user_id, $filters);
-            echo json_encode(['success' => true, 'transactions' => $transactions]);
-            exit();
-            
-        // Autocomplete search suggestions
-        case 'autocomplete':
-            $term = $_GET['term'] ?? '';
-            $results = autocompleteSearch($user_id, $term);
-            echo json_encode($results);
-            exit();
-            
-        // CRUD: CREATE - Add new transaction
-        case 'add_transaction':
-            $type = $_POST['type'];
-            $amount = floatval($_POST['amount']);
-            $remarks = sanitize($_POST['remarks']);
-            $date = $_POST['date'];
-            
-            // Validate amount
-            if ($amount <= 0) {
-                echo json_encode(['success' => false, 'message' => 'Amount must be positive']);
-                exit();
-            }
-            
-            // Insert into database
-            $query = "INSERT INTO transactions (user_id, type, amount, remarks, transaction_date) 
-                      VALUES (:user_id, :type, :amount, :remarks, :date)";
-            
-            $stmt = $db->prepare($query);
-            $stmt->execute([
-                ':user_id' => $user_id,
-                ':type' => $type,
-                ':amount' => $amount,
-                ':remarks' => $remarks,
-                ':date' => $date
-            ]);
-            
-            echo json_encode(['success' => true, 'message' => ucfirst($type) . ' added successfully']);
-            exit();
-            
-        // CRUD: READ - Get single transaction for editing
-        case 'get_transaction':
-            $id = intval($_GET['id']);
-            $transaction = getTransactionById($user_id, $id);
-            
-            if ($transaction) {
-                echo json_encode(['success' => true, 'transaction' => $transaction]);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Transaction not found']);
-            }
-            exit();
-            
-        // CRUD: UPDATE - Update existing transaction
-        case 'update_transaction':
-            $id = intval($_POST['id']);
-            $data = [
-                'type' => $_POST['type'],
-                'amount' => floatval($_POST['amount']),
-                'remarks' => sanitize($_POST['remarks']),
-                'date' => $_POST['date']
-            ];
-            
-            // Validate amount
-            if ($data['amount'] <= 0) {
-                echo json_encode(['success' => false, 'message' => 'Amount must be positive']);
-                exit();
-            }
-            
-            if (updateTransaction($user_id, $id, $data)) {
-                echo json_encode(['success' => true, 'message' => 'Transaction updated successfully']);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Update failed']);
-            }
-            exit();
-            
-        // CRUD: DELETE - Delete transaction
-        case 'delete_transaction':
-            $id = intval($_POST['id']);
-            
-            $query = "DELETE FROM transactions WHERE id = :id AND user_id = :user_id";
-            $stmt = $db->prepare($query);
-            $stmt->execute([':id' => $id, ':user_id' => $user_id]);
-            
-            if ($stmt->rowCount() > 0) {
-                echo json_encode(['success' => true, 'message' => 'Transaction deleted']);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Transaction not found']);
-            }
-            exit();
-            
-        // Update user profile
-        case 'update_profile':
-            $full_name = sanitize($_POST['full_name']);
-            $email = sanitize($_POST['email']);
-            $current_password = $_POST['current_password'];
-            $new_password = $_POST['new_password'] ?? '';
-            
-            // Verify current password
-            $stmt = $db->prepare("SELECT password FROM users WHERE id = :id");
-            $stmt->execute([':id' => $user_id]);
-            $user = $stmt->fetch();
-            
-            if (!password_verify($current_password, $user['password'])) {
-                echo json_encode(['success' => false, 'message' => 'Current password is incorrect']);
-                exit();
-            }
-            
-            // Update profile
-            $query = "UPDATE users SET full_name = :full_name, email = :email";
-            $params = [':full_name' => $full_name, ':email' => $email, ':id' => $user_id];
-            
-            if (!empty($new_password)) {
-                $passwordErrors = validatePasswordStrength($new_password);
-                if (!empty($passwordErrors)) {
-                    echo json_encode(['success' => false, 'message' => implode(", ", $passwordErrors)]);
-                    exit();
-                }
-                $query .= ", password = :password";
-                $params[':password'] = password_hash($new_password, PASSWORD_DEFAULT);
-            }
-            
-            $query .= " WHERE id = :id";
-            
-            $stmt = $db->prepare($query);
-            $stmt->execute($params);
-            
-            // Update session
-            $_SESSION['full_name'] = $full_name;
-            $_SESSION['email'] = $email;
-            
-            echo json_encode(['success' => true, 'message' => 'Profile updated successfully']);
-            exit();
-            
-        default:
-            echo json_encode(['success' => false, 'message' => 'Invalid action']);
-            exit();
+    // Get single transaction
+    if ($action == 'get') {
+        $id = $_GET['id'] ?? 0;
+        $transaction = getTransaction($user_id, $id);
+        echo json_encode(['success' => true, 'transaction' => $transaction]);
+        exit();
+    }
+    
+    // Autocomplete
+    if ($action == 'autocomplete') {
+        $term = $_GET['term'] ?? '';
+        $results = getAutocomplete($user_id, $term);
+        echo json_encode($results);
+        exit();
+    }
+    
+    exit();
+}
+
+// Handle form submissions
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    
+    // Check CSRF token
+    if (!CSRF::check($_POST['token'] ?? '')) {
+        die("Invalid security token");
+    }
+    
+    // Add transaction
+    if (isset($_POST['add'])) {
+        $type = $_POST['type'];
+        $amount = $_POST['amount'];
+        $remarks = clean($_POST['remarks']);
+        $date = $_POST['date'];
+        
+        $query = "INSERT INTO transactions (user_id, type, amount, remarks, transaction_date) 
+                  VALUES (:user_id, :type, :amount, :remarks, :date)";
+        
+        $stmt = $db->prepare($query);
+        $stmt->execute([
+            ':user_id' => $user_id,
+            ':type' => $type,
+            ':amount' => $amount,
+            ':remarks' => $remarks,
+            ':date' => $date
+        ]);
+        
+        header("Location: index.php?success=added");
+        exit();
+    }
+    
+    // Update transaction
+    if (isset($_POST['update'])) {
+        $id = $_POST['id'];
+        $type = $_POST['type'];
+        $amount = $_POST['amount'];
+        $remarks = clean($_POST['remarks']);
+        $date = $_POST['date'];
+        
+        $query = "UPDATE transactions 
+                  SET type = :type, amount = :amount, remarks = :remarks, transaction_date = :date
+                  WHERE id = :id AND user_id = :user_id";
+        
+        $stmt = $db->prepare($query);
+        $stmt->execute([
+            ':type' => $type,
+            ':amount' => $amount,
+            ':remarks' => $remarks,
+            ':date' => $date,
+            ':id' => $id,
+            ':user_id' => $user_id
+        ]);
+        
+        header("Location: index.php?success=updated");
+        exit();
+    }
+    
+    // Delete transaction
+    if (isset($_POST['delete'])) {
+        $id = $_POST['id'];
+        
+        $query = "DELETE FROM transactions WHERE id = :id AND user_id = :user_id";
+        $stmt = $db->prepare($query);
+        $stmt->execute([':id' => $id, ':user_id' => $user_id]);
+        
+        header("Location: index.php?success=deleted");
+        exit();
     }
 }
 
-// ========================================
-// Page Load - Get Initial Data
-// ========================================
-$totals = getFinancialTotals($user_id);
+// Get data for page
+$totals = getTotals($user_id);
 $balance = $totals['total_income'] - $totals['total_expense'];
-$chart_data = getChartData($user_id, 'monthly');
 $recent = getTransactions($user_id, ['limit' => 5]);
 ?>
 
 <?php include '../includes/header.php'; ?>
 
-<div class="max-w-7xl mx-auto px-4 py-6">
-    <!-- Financial Summary Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div class="bg-white p-6 rounded-lg border">
-            <div class="text-gray-600 text-sm">Current Balance</div>
-            <div id="balance" class="text-2xl font-bold text-gray-800">Rs <?php echo number_format($balance, 2); ?></div>
+<div class="container">
+    
+    <!-- Success Message -->
+    <?php if (isset($_GET['success'])): ?>
+    <aside class="success-message" role="alert">
+        <?php 
+        if ($_GET['success'] == 'added') echo "Transaction added successfully!";
+        if ($_GET['success'] == 'updated') echo "Transaction updated successfully!";
+        if ($_GET['success'] == 'deleted') echo "Transaction deleted successfully!";
+        ?>
+    </aside>
+    <?php endif; ?>
+    
+    <!-- Stats Cards -->
+    <section aria-label="Financial Summary">
+        <div class="grid grid-cols-3">
+            <article class="card">
+                <div class="card-title">Current Balance</div>
+                <div id="balance" class="card-value balance">Rs <?php echo number_format($balance, 2); ?></div>
+            </article>
+            <article class="card">
+                <div class="card-title">Total Income</div>
+                <div id="totalIncome" class="card-value income">Rs <?php echo number_format($totals['total_income'], 2); ?></div>
+            </article>
+            <article class="card">
+                <div class="card-title">Total Expense</div>
+                <div id="totalExpense" class="card-value expense">Rs <?php echo number_format($totals['total_expense'], 2); ?></div>
+            </article>
         </div>
-        <div class="bg-white p-6 rounded-lg border">
-            <div class="text-gray-600 text-sm">Total Income</div>
-            <div id="totalIncome" class="text-2xl font-bold text-green-600">Rs <?php echo number_format($totals['total_income'], 2); ?></div>
-        </div>
-        <div class="bg-white p-6 rounded-lg border">
-            <div class="text-gray-600 text-sm">Total Expense</div>
-            <div id="totalExpense" class="text-2xl font-bold text-red-600">Rs <?php echo number_format($totals['total_expense'], 2); ?></div>
-        </div>
-    </div>
+    </section>
 
-    <!-- Quick Action Buttons -->
-    <div class="flex flex-wrap gap-3 mb-6">
-        <button onclick="openModal('incomeModal')" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
-            + Add Income
-        </button>
-        <button onclick="openModal('expenseModal')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
-            - Add Expense
-        </button>
-        <button onclick="showStatement()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
-            View Statement
-        </button>
-    </div>
+    <!-- Buttons -->
+    <nav class="button-group" aria-label="Transaction actions">
+        <button onclick="openModal('incomeModal')" class="btn btn-green" aria-label="Add income transaction">+ Add Income</button>
+        <button onclick="openModal('expenseModal')" class="btn btn-red" aria-label="Add expense transaction">- Add Expense</button>
+    </nav>
 
     <!-- Chart & Recent Transactions -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <!-- Enhanced Chart Section -->
-        <div class="bg-white p-6 rounded-lg border">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-semibold">Financial Overview</h2>
-                <div class="flex space-x-2">
-                    <button onclick="changeChart('daily')" class="px-3 py-1 rounded text-sm hover:bg-gray-100">Daily</button>
-                    <button onclick="changeChart('weekly')" class="px-3 py-1 rounded text-sm hover:bg-gray-100">Weekly</button>
-                    <button onclick="changeChart('monthly')" class="px-3 py-1 rounded text-sm bg-blue-500 text-white">Monthly</button>
-                    <button onclick="changeChart('yearly')" class="px-3 py-1 rounded text-sm hover:bg-gray-100">Yearly</button>
-                </div>
-            </div>
+    <div class="grid grid-cols-2">
+        <!-- Chart -->
+        <section class="card" aria-labelledby="chart-heading">
+            <header class="chart-header">
+                <h2 id="chart-heading">Financial Overview</h2>
+            </header>
             <div class="chart-container">
-                <canvas id="chart"></canvas>
+                <canvas id="chart" role="img" aria-label="Bar chart showing total income and expense"></canvas>
             </div>
-        </div>
+        </section>
 
         <!-- Recent Transactions -->
-        <div class="bg-white p-6 rounded-lg border">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-semibold">Recent Transactions</h2>
-                <button onclick="loadRecent()" class="text-blue-500 hover:text-blue-700">Refresh</button>
-            </div>
-            <div id="recentList" class="space-y-4">
+        <section class="card" aria-labelledby="recent-heading">
+            <header class="transaction-header">
+                <h2 id="recent-heading">Recent Transactions</h2>
+            </header>
+            <div id="recentList" class="transactions-list">
                 <?php if (empty($recent)): ?>
-                    <div class="text-center py-8 text-gray-500">No transactions yet</div>
+                    <p class="empty-state">No transactions yet</p>
                 <?php else: ?>
                     <?php foreach ($recent as $t): ?>
-                    <div class="transaction-item">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <div class="flex items-center space-x-2 mb-1">
-                                    <span class="<?php echo $t['type'] === 'income' ? 'text-green-600' : 'text-red-600'; ?>">
+                    <article class="transaction-item">
+                        <div class="transaction-row">
+                            <div class="transaction-left">
+                                <div class="transaction-meta">
+                                    <span class="transaction-type <?php echo $t['type']; ?>">
                                         <?php echo ucfirst($t['type']); ?>
                                     </span>
-                                    <span class="text-sm text-gray-500"><?php echo escape($t['transaction_date']); ?></span>
+                                    <time class="transaction-date" datetime="<?php echo $t['transaction_date']; ?>">
+                                        <?php echo $t['transaction_date']; ?>
+                                    </time>
                                 </div>
-                                <div class="text-gray-800"><?php echo escape($t['remarks'] ?: 'No remarks'); ?></div>
+                                <p class="transaction-remarks"><?php echo clean($t['remarks']); ?></p>
                             </div>
-                            <div class="text-right">
-                                <div class="font-semibold <?php echo $t['type'] === 'income' ? 'text-green-600' : 'text-red-600'; ?>">
+                            <div class="transaction-right">
+                                <div class="transaction-amount <?php echo $t['type']; ?>">
                                     <?php echo $t['type'] === 'income' ? '+' : '-'; ?>Rs <?php echo number_format($t['amount'], 2); ?>
-                                </div>
-                                <div class="flex space-x-2 mt-1">
-                                    <button onclick="editTransaction(<?php echo $t['id']; ?>)" 
-                                            class="text-blue-500 hover:text-blue-700 text-sm">
-                                        Edit
-                                    </button>
-                                    <button onclick="deleteTransaction(<?php echo $t['id']; ?>)" 
-                                            class="text-red-500 hover:text-red-700 text-sm">
-                                        Delete
-                                    </button>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </article>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
-        </div>
+        </section>
     </div>
 
-    <!-- Statement Section (Hidden by default) -->
-    <div id="statementSection" class="bg-white p-6 rounded-lg border hidden">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="text-lg font-semibold">Transaction Statement</h2>
-            <div class="flex space-x-3">
-                <button onclick="downloadCSV()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
-                    Download CSV
-                </button>
-                <button onclick="hideStatement()" class="border border-gray-300 px-4 py-2 rounded-lg">
-                    Close
-                </button>
-            </div>
-        </div>
+    <!-- Statement Section -->
+    <section id="statementSection" class="card" aria-labelledby="statement-heading">
+        <header class="statement-header">
+            <h2 id="statement-heading">Transaction Statement</h2>
+        </header>
 
-        <!-- Advanced Search Filters (Multiple Criteria) -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            <select id="filterType" class="border border-gray-300 rounded px-3 py-2">
+        <!-- Filters in Single Row -->
+        <form class="filter-grid" onsubmit="event.preventDefault(); loadStatement();" aria-label="Transaction filters">
+            <label for="filterType" class="sr-only">Filter by type</label>
+            <select id="filterType" class="filter-select" aria-label="Transaction type filter">
                 <option value="">All Types</option>
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
             </select>
-            <input type="date" id="startDate" class="border border-gray-300 rounded px-3 py-2" 
-                   value="<?php echo date('Y-m-01'); ?>">
-            <input type="date" id="endDate" class="border border-gray-300 rounded px-3 py-2" 
-                   value="<?php echo date('Y-m-d'); ?>">
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            <input type="number" id="minAmount" placeholder="Min Amount" 
-                   class="border border-gray-300 rounded px-3 py-2" step="0.01">
-            <input type="number" id="maxAmount" placeholder="Max Amount" 
-                   class="border border-gray-300 rounded px-3 py-2" step="0.01">
-            <div class="relative">
-                <input type="text" id="filterSearch" placeholder="Search remarks..." 
-                       class="border border-gray-300 rounded px-3 py-2 w-full" autocomplete="off">
-                <div id="autocomplete" class="hidden absolute z-10 bg-white border border-gray-300 rounded mt-1 w-full max-h-48 overflow-y-auto shadow-lg"></div>
+            
+            <label for="startDate" class="sr-only">Start date</label>
+            <input type="date" id="startDate" class="filter-input" value="<?php echo date('Y-m-d'); ?>" aria-label="Start date">
+            
+            <label for="endDate" class="sr-only">End date</label>
+            <input type="date" id="endDate" class="filter-input" value="<?php echo date('Y-m-d'); ?>" aria-label="End date">
+            
+            <!-- Search with Autocomplete -->
+            <div style="position: relative;">
+                <label for="filterSearch" class="sr-only">Search remarks</label>
+                <input type="search" id="filterSearch" placeholder="Search remarks..." class="filter-input" autocomplete="off" aria-label="Search remarks">
+                <div id="filterDropdown" class="autocomplete-dropdown" role="listbox"></div>
             </div>
-        </div>
-        <div class="flex space-x-3 mb-6">
-            <button onclick="loadStatement()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
-                Apply Filters
-            </button>
-            <button onclick="clearFilters()" class="border border-gray-300 px-4 py-2 rounded-lg">
-                Clear Filters
-            </button>
-        </div>
+            
+            <button type="submit" class="filter-btn filter-btn-apply" aria-label="Apply filters">✓ Apply</button>
+            <button type="button" onclick="clearFilters()" class="filter-btn filter-btn-clear" aria-label="Clear filters">Clear</button>
+        </form>
 
-        <!-- Statement Table -->
-        <div id="statementTable">
-            <div class="text-center py-8 text-gray-500">Apply filters to view statement</div>
-        </div>
-    </div>
+        <div id="statementTable" class="statement-table" role="region" aria-live="polite" aria-label="Transaction statement table"></div>
+    </section>
 </div>
 
-<!-- Include Modal Forms -->
+<!-- Modals -->
 <?php include '../includes/modals.php'; ?>
 
 <script>
-// Pass CSRF token and initial chart data to JavaScript
-const CSRF_TOKEN = '<?php echo CSRF::generateToken(); ?>';
-
-// Initialize chart when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    const chartData = <?php echo json_encode($chart_data); ?>;
-    if (typeof updateChart === 'function') {
-        updateChart(chartData);
-    }
+// Initialize bar chart with total income and expense
+window.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing dashboard...');
+    
+    const totalIncome = parseFloat(<?php echo $totals['total_income']; ?>) || 0;
+    const totalExpense = parseFloat(<?php echo $totals['total_expense']; ?>) || 0;
+    
+    console.log('Total Income:', totalIncome);
+    console.log('Total Expense:', totalExpense);
+    
+    // Initialize chart
+    updateChart(totalIncome, totalExpense);
+    
+    // Load today's transactions by default
+    loadStatement();
 });
 </script>
 
