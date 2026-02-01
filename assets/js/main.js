@@ -227,7 +227,13 @@ if (searchInput) {
 function selectSearch(value) {
     document.getElementById('searchInput').value = value;
     searchDropdown.style.display = 'none';
+    
+    // Clear all filters except search
+    document.getElementById('filterType').value = '';
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
     document.getElementById('filterSearch').value = value;
+    
     loadStatement();
 }
 

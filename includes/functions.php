@@ -41,20 +41,8 @@ function getTotals($user_id) {
 function getChartData($user_id, $period = 'monthly') {
     global $db;
     
-    // Set date format based on period
-    if ($period == 'daily') {
-        $format = "%Y-%m-%d";
-        $days = "30 DAY";
-    } elseif ($period == 'weekly') {
-        $format = "%x-W%v";
-        $days = "12 WEEK";
-    } elseif ($period == 'yearly') {
-        $format = "%Y";
-        $days = "5 YEAR";
-    } else {
         $format = "%Y-%m";
         $days = "12 MONTH";
-    }
     
     $query = "SELECT 
                 DATE_FORMAT(transaction_date, '$format') as period,
